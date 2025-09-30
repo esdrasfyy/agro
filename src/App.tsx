@@ -1023,7 +1023,7 @@ function App() {
               <CreditCard className="h-8 w-8 text-white" />
             </div>
             <h1 className="text-4xl font-bold text-gray-900">
-              Análise de Crédito
+              Elegibilidade PF
             </h1>
           </div>
           <p className="text-gray-600 text-lg max-w-2xl mx-auto">
