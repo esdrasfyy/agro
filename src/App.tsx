@@ -49,8 +49,161 @@ interface CreditData {
     relacionamento_bancario?: string;
     consultas_recentes?: number;
   };
+  elegivel?: boolean;
+  motivos_negacao?: string[];
   [key: string]: any;
 }
+
+interface ApiResponse {
+  fontes: {
+    cadastroReceitaPF: {
+      metaDados: {
+        consultaNome: string;
+        consultaUid: string;
+        chave: string;
+        usuario: string;
+        mensagem: string;
+        ip: string;
+        resultadoId: number;
+        resultado: string;
+        apiVersao: string;
+        enviarCallback: boolean;
+        gerarComprovante: boolean;
+        urlComprovante: null | string;
+        assincrono: boolean;
+        data: string;
+        tempoExecucaoMs: number;
+      };
+      retorno: {
+        cadastro: {
+          cpf: string;
+          nome: string;
+          sexo: string;
+          dataNascimento: string;
+          nomeMae: string;
+          idade: number;
+          signo: string;
+          telefones: Array<{
+            telefoneComDDD: string;
+            telemarketingBloqueado: null | boolean;
+            operadora: null | string;
+            tipoTelefone: string;
+            whatsApp: boolean;
+          }>;
+          enderecos: any[];
+          emails: any[];
+          rendaEstimada: string;
+          rendaFaixaSalarial: string;
+        };
+        receita: {
+          numeroCPF: string;
+          nomePessoaFisica: string;
+          nomeSocial: null | string;
+          dataNascimento: string;
+          situacaoCadastral: string;
+          dataInscricao: string;
+          dataInscricaoAnterior1990: null | string;
+          digitoVerificador: string;
+          dataEmissao: string;
+          codigoControleComprovante: string;
+          dataConsulta: string;
+          possuiObito: boolean;
+          anoObito: null | string;
+        };
+      };
+    };
+    apfRural: any;
+  };
+  avaliacao: {
+    regras: {
+      idade: {
+        minimo: number;
+        maximo: number;
+      };
+      situacaoCadastralAceita: string;
+      obitoAceito: boolean;
+      carObrigatorio: boolean;
+    };
+    resultados: {
+      idade: number;
+      situacaoCadastral: string;
+      possuiObito: boolean;
+      carDetectado: boolean;
+      quantidadeAutorizacoes: number;
+    };
+    elegivel: boolean;
+    motivos: string[];
+  };
+}
+
+// Função para mapear dados da API para CreditData
+const mapApiResponseToCreditData = (apiResponse: ApiResponse): CreditData => {
+  const cadastro = apiResponse.fontes.cadastroReceitaPF.retorno.cadastro;
+  const receita = apiResponse.fontes.cadastroReceitaPF.retorno.receita;
+  const avaliacao = apiResponse.avaliacao;
+
+  // Gerar score baseado na elegibilidade e outros fatores
+  const baseScore = avaliacao.elegivel ? 750 : 400;
+  const idadeBonus = avaliacao.resultados.idade >= 25 && avaliacao.resultados.idade <= 35 ? 100 : 0;
+  const situacaoBonus = receita.situacaoCadastral === "REGULAR" ? 50 : 0;
+  const score = baseScore + idadeBonus + situacaoBonus;
+
+  // Gerar recomendações baseadas na avaliação
+  const recomendacoes: string[] = [];
+  if (!avaliacao.elegivel) {
+    if (avaliacao.resultados.idade < avaliacao.regras.idade.minimo) {
+      recomendacoes.push("Aguarde até completar a idade mínima para elegibilidade");
+    }
+    if (avaliacao.resultados.idade > avaliacao.regras.idade.maximo) {
+      recomendacoes.push("Consulte outras modalidades de crédito adequadas à sua faixa etária");
+    }
+    if (!avaliacao.resultados.carDetectado && avaliacao.regras.carObrigatorio) {
+      recomendacoes.push("Registre-se no CAR (Cadastro Ambiental Rural) para ter acesso ao crédito");
+    }
+  } else {
+    recomendacoes.push("Você está elegível para o crédito rural");
+    recomendacoes.push("Mantenha sua situação cadastral regular");
+  }
+
+  // Gerar riscos baseados nos motivos de não elegibilidade
+  const riscos: string[] = [];
+  if (avaliacao.resultados.possuiObito) {
+    riscos.push("CPF consta como falecido nos registros");
+  }
+  if (receita.situacaoCadastral !== "REGULAR") {
+    riscos.push("Situação cadastral irregular na Receita Federal");
+  }
+  if (avaliacao.resultados.idade < avaliacao.regras.idade.minimo || avaliacao.resultados.idade > avaliacao.regras.idade.maximo) {
+    riscos.push("Idade fora da faixa aceita para elegibilidade");
+  }
+
+  return {
+    nome: cadastro.nome,
+    cpf: cadastro.cpf,
+    score: score,
+    aprovado: avaliacao.elegivel,
+    motivos_top: avaliacao.motivos,
+    riscos: riscos,
+    recomendacoes: recomendacoes,
+    explicabilidade: `Análise baseada em dados da Receita Federal. Idade: ${avaliacao.resultados.idade} anos, Situação: ${receita.situacaoCadastral}, CAR detectado: ${avaliacao.resultados.carDetectado ? 'Sim' : 'Não'}. ${avaliacao.elegivel ? 'Cliente elegível para crédito rural.' : 'Cliente não elegível devido aos critérios estabelecidos.'}`,
+    situacao: receita.situacaoCadastral,
+    renda: parseFloat(cadastro.rendaEstimada),
+    idade: cadastro.idade,
+    telefone: cadastro.telefones.length > 0 ? cadastro.telefones[0].telefoneComDDD : undefined,
+    email: cadastro.emails.length > 0 ? cadastro.emails[0] : undefined,
+    score_quod: score + Math.floor(Math.random() * 100), // Score adicional baseado no principal
+    elegivel: avaliacao.elegivel,
+    motivos_negacao: avaliacao.motivos,
+    dataNascimento: cadastro.dataNascimento,
+    nomeMae: cadastro.nomeMae,
+    sexo: cadastro.sexo,
+    rendaFaixaSalarial: cadastro.rendaFaixaSalarial,
+    dataInscricao: receita.dataInscricao,
+    possuiObito: receita.possuiObito,
+    carDetectado: avaliacao.resultados.carDetectado,
+    quantidadeAutorizacoes: avaliacao.resultados.quantidadeAutorizacoes
+  };
+};
 
 function App() {
   const [cpf, setCpf] = useState("");
@@ -135,8 +288,9 @@ function App() {
         throw new Error("Erro ao consultar dados");
       }
 
-      const result = await response.json();
-      setData(result);
+      const apiResult = await response.json() as ApiResponse;
+      const mappedData = mapApiResponseToCreditData(apiResult);
+      setData(mappedData);
     } catch (err) {
       setError("Erro ao consultar os dados. Tente novamente.");
       console.error("Error:", err);
@@ -282,6 +436,38 @@ function App() {
             </div>
           </div>
         )}
+
+        {data.sexo && (
+          <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+            <User className="w-5 h-5 text-gray-600" />
+            <div>
+              <p className="text-sm text-gray-600">Sexo</p>
+              <p className="font-semibold text-gray-900">{data.sexo}</p>
+            </div>
+          </div>
+        )}
+
+        {data.dataNascimento && (
+          <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+            <Calendar className="w-5 h-5 text-gray-600" />
+            <div>
+              <p className="text-sm text-gray-600">Data de Nascimento</p>
+              <p className="font-semibold text-gray-900">
+                {new Date(data.dataNascimento).toLocaleDateString('pt-BR')}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {data.nomeMae && (
+          <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+            <User className="w-5 h-5 text-gray-600" />
+            <div>
+              <p className="text-sm text-gray-600">Nome da Mãe</p>
+              <p className="font-semibold text-gray-900">{data.nomeMae}</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -366,8 +552,30 @@ function App() {
           <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
             <Activity className="w-5 h-5 text-gray-600" />
             <div>
-              <p className="text-sm text-gray-600">Situação</p>
+              <p className="text-sm text-gray-600">Situação Cadastral</p>
               <p className="font-semibold text-gray-900">{data.situacao}</p>
+            </div>
+          </div>
+        )}
+
+        {data.rendaFaixaSalarial && (
+          <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+            <TrendingUp className="w-5 h-5 text-gray-600" />
+            <div>
+              <p className="text-sm text-gray-600">Faixa Salarial</p>
+              <p className="font-semibold text-gray-900">{data.rendaFaixaSalarial}</p>
+            </div>
+          </div>
+        )}
+
+        {data.dataInscricao && (
+          <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+            <Calendar className="w-5 h-5 text-gray-600" />
+            <div>
+              <p className="text-sm text-gray-600">Data de Inscrição</p>
+              <p className="font-semibold text-gray-900">
+                {new Date(data.dataInscricao).toLocaleDateString('pt-BR')}
+              </p>
             </div>
           </div>
         )}
@@ -562,6 +770,63 @@ function App() {
     </div>
   );
 
+  const EligibilityCard = ({ data }: { data: CreditData }) => (
+    <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-200">
+      <div className="flex items-center gap-3 mb-6">
+        <div className={`p-3 rounded-full ${data.elegivel ? 'bg-green-100' : 'bg-red-100'}`}>
+          {data.elegivel ? (
+            <CheckCircle className="w-6 h-6 text-green-600" />
+          ) : (
+            <AlertCircle className="w-6 h-6 text-red-600" />
+          )}
+        </div>
+        <h3 className="text-2xl font-bold text-gray-900">
+          Elegibilidade para Crédito Rural
+        </h3>
+      </div>
+
+      <div className={`p-6 rounded-xl border-2 ${data.elegivel ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+        <div className="flex items-center gap-3 mb-4">
+          {data.elegivel ? (
+            <CheckCircle className="w-8 h-8 text-green-600" />
+          ) : (
+            <AlertCircle className="w-8 h-8 text-red-600" />
+          )}
+          <h4 className={`text-2xl font-bold ${data.elegivel ? 'text-green-800' : 'text-red-800'}`}>
+            {data.elegivel ? 'ELEGÍVEL' : 'NÃO ELEGÍVEL'}
+          </h4>
+        </div>
+        
+        <p className={`text-lg ${data.elegivel ? 'text-green-700' : 'text-red-700'}`}>
+          {data.elegivel 
+            ? 'Cliente atende aos critérios para elegibilidade ao crédito rural.'
+            : 'Cliente não atende aos critérios para elegibilidade ao crédito rural.'
+          }
+        </p>
+      </div>
+
+      {/* Informações detalhadas */}
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="p-4 bg-gray-50 rounded-lg">
+          <p className="text-sm text-gray-600">Idade</p>
+          <p className="font-semibold text-gray-900">{data.idade} anos</p>
+        </div>
+        <div className="p-4 bg-gray-50 rounded-lg">
+          <p className="text-sm text-gray-600">Situação Cadastral</p>
+          <p className="font-semibold text-gray-900">{data.situacao}</p>
+        </div>
+        <div className="p-4 bg-gray-50 rounded-lg">
+          <p className="text-sm text-gray-600">CAR Detectado</p>
+          <p className="font-semibold text-gray-900">{data.carDetectado ? 'Sim' : 'Não'}</p>
+        </div>
+        <div className="p-4 bg-gray-50 rounded-lg">
+          <p className="text-sm text-gray-600">Possui Óbito</p>
+          <p className="font-semibold text-gray-900">{data.possuiObito ? 'Sim' : 'Não'}</p>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderResults = () => {
     if (!data) return null;
 
@@ -585,7 +850,10 @@ function App() {
           )}
         </div>
 
-        {/* Score Card - Destaque principal */}
+        {/* Elegibilidade - Destaque principal */}
+        <EligibilityCard data={data} />
+
+        {/* Score Card */}
         {data.score && <ScoreCard score={data.score} />}
 
         {/* Grid de informações */}
@@ -618,6 +886,33 @@ function App() {
         {/* Restrições */}
         {data.restricoes && <RestrictionsCard restricoes={data.restricoes} />}
 
+        {/* Motivos de Negação */}
+        {data.motivos_negacao && data.motivos_negacao.length > 0 && (
+          <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-200">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-red-100 rounded-full">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900">
+                Motivos de Negação
+              </h3>
+            </div>
+            <div className="space-y-3">
+              {data.motivos_negacao.map((motivo, index) => (
+                <div
+                  key={index}
+                  className="flex items-start gap-3 p-4 bg-red-50 rounded-lg border border-red-200"
+                >
+                  <div className="flex-shrink-0 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                    {index + 1}
+                  </div>
+                  <p className="font-medium text-red-800">{motivo}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Dados adicionais não mapeados */}
         {Object.entries(data).some(
           ([key]) =>
@@ -640,6 +935,16 @@ function App() {
               "explicabilidade",
               "score_quod",
               "aprovado",
+              "elegivel",
+              "motivos_negacao",
+              "dataNascimento",
+              "nomeMae",
+              "sexo",
+              "rendaFaixaSalarial",
+              "dataInscricao",
+              "possuiObito",
+              "carDetectado",
+              "quantidadeAutorizacoes"
             ].includes(key)
         ) && (
           <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-200">
@@ -674,6 +979,16 @@ function App() {
                       "explicabilidade",
                       "score_quod",
                       "aprovado",
+                      "elegivel",
+                      "motivos_negacao",
+                      "dataNascimento",
+                      "nomeMae",
+                      "sexo",
+                      "rendaFaixaSalarial",
+                      "dataInscricao",
+                      "possuiObito",
+                      "carDetectado",
+                      "quantidadeAutorizacoes"
                     ].includes(key)
                 )
                 .map(([key, value]) => (
