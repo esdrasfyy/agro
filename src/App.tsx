@@ -190,7 +190,7 @@ const mapApiResponseToCreditData = (apiResponse: ApiResponse): CreditData => {
     renda: parseFloat(cadastro.rendaEstimada),
     idade: cadastro.idade,
     telefone: cadastro.telefones.length > 0 ? cadastro.telefones[0].telefoneComDDD : undefined,
-    email: cadastro.emails.length > 0 ? cadastro.emails[0] : undefined,
+    email: cadastro.emails.length > 0 ? (typeof cadastro.emails[0] === 'string' ? cadastro.emails[0] : String(cadastro.emails[0].email || cadastro.emails[0].enderecoEmail || '')) : undefined,
     score_quod: score + Math.floor(Math.random() * 100), // Score adicional baseado no principal
     elegivel: avaliacao.elegivel,
     motivos_negacao: avaliacao.motivos,
@@ -400,7 +400,7 @@ function App() {
             <User className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-sm text-gray-600">Nome Completo</p>
-              <p className="font-semibold text-gray-900">{data.nome}</p>
+              <p className="font-semibold text-gray-900">{String(data.nome)}</p>
             </div>
           </div>
         )}
@@ -442,7 +442,7 @@ function App() {
             <User className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-sm text-gray-600">Sexo</p>
-              <p className="font-semibold text-gray-900">{data.sexo}</p>
+              <p className="font-semibold text-gray-900">{String(data.sexo)}</p>
             </div>
           </div>
         )}
@@ -464,7 +464,7 @@ function App() {
             <User className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-sm text-gray-600">Nome da Mãe</p>
-              <p className="font-semibold text-gray-900">{data.nomeMae}</p>
+              <p className="font-semibold text-gray-900">{String(data.nomeMae)}</p>
             </div>
           </div>
         )}
@@ -487,7 +487,7 @@ function App() {
             <Phone className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-sm text-gray-600">Telefone</p>
-              <p className="font-semibold text-gray-900">{data.telefone}</p>
+              <p className="font-semibold text-gray-900">{String(data.telefone)}</p>
             </div>
           </div>
         )}
@@ -497,7 +497,7 @@ function App() {
             <Mail className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-sm text-gray-600">E-mail</p>
-              <p className="font-semibold text-gray-900">{data.email}</p>
+              <p className="font-semibold text-gray-900">{String(data.email)}</p>
             </div>
           </div>
         )}
@@ -553,7 +553,7 @@ function App() {
             <Activity className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-sm text-gray-600">Situação Cadastral</p>
-              <p className="font-semibold text-gray-900">{data.situacao}</p>
+              <p className="font-semibold text-gray-900">{String(data.situacao)}</p>
             </div>
           </div>
         )}
@@ -563,7 +563,7 @@ function App() {
             <TrendingUp className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-sm text-gray-600">Faixa Salarial</p>
-              <p className="font-semibold text-gray-900">{data.rendaFaixaSalarial}</p>
+              <p className="font-semibold text-gray-900">{String(data.rendaFaixaSalarial)}</p>
             </div>
           </div>
         )}
