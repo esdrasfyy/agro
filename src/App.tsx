@@ -136,6 +136,60 @@ interface ApiResponse {
   };
 }
 
+// Funções utilitárias para sanitizar dados
+const sanitizeString = (value: any): string | undefined => {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    // Se for um objeto, tenta extrair propriedades comuns
+    if (value.email) return String(value.email);
+    if (value.enderecoEmail) return String(value.enderecoEmail);
+    if (value.telefoneComDDD) return String(value.telefoneComDDD);
+    if (value.nome) return String(value.nome);
+    if (value.cpf) return String(value.cpf);
+    // Se não conseguir extrair nada útil, retorna undefined
+    return undefined;
+  }
+  return String(value);
+};
+
+const sanitizeNumber = (value: any): number | undefined => {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    return isNaN(parsed) ? undefined : parsed;
+  }
+  return undefined;
+};
+
+const sanitizeBoolean = (value: any): boolean => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    return value.toLowerCase() === 'true' || value === '1' || value.toLowerCase() === 'sim';
+  }
+  if (typeof value === 'number') return value !== 0;
+  return Boolean(value);
+};
+
+const sanitizeArray = (value: any): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value.map(item => sanitizeString(item)).filter(Boolean) as string[];
+};
+
+// Componente wrapper para renderização segura
+const SafeText = ({ children, fallback = '' }: { children: any; fallback?: string }) => {
+  const safeValue = sanitizeString(children) || fallback;
+  return <>{safeValue}</>;
+};
+
+const SafeNumber = ({ children, fallback = 0 }: { children: any; fallback?: number }) => {
+  const safeValue = sanitizeNumber(children) ?? fallback;
+  return <>{safeValue}</>;
+};
+
 // Função para mapear dados da API para CreditData
 const mapApiResponseToCreditData = (apiResponse: ApiResponse): CreditData => {
   const cadastro = apiResponse.fontes.cadastroReceitaPF.retorno.cadastro;
@@ -178,30 +232,30 @@ const mapApiResponseToCreditData = (apiResponse: ApiResponse): CreditData => {
   }
 
   return {
-    nome: cadastro.nome,
-    cpf: cadastro.cpf,
+    nome: sanitizeString(cadastro.nome),
+    cpf: sanitizeString(cadastro.cpf),
     score: score,
-    aprovado: avaliacao.elegivel,
-    motivos_top: avaliacao.motivos,
-    riscos: riscos,
-    recomendacoes: recomendacoes,
-    explicabilidade: `Análise baseada em dados da Receita Federal. Idade: ${avaliacao.resultados.idade} anos, Situação: ${receita.situacaoCadastral}, CAR detectado: ${avaliacao.resultados.carDetectado ? 'Sim' : 'Não'}. ${avaliacao.elegivel ? 'Cliente elegível para crédito rural.' : 'Cliente não elegível devido aos critérios estabelecidos.'}`,
-    situacao: receita.situacaoCadastral,
-    renda: parseFloat(cadastro.rendaEstimada),
-    idade: cadastro.idade,
-    telefone: cadastro.telefones.length > 0 ? cadastro.telefones[0].telefoneComDDD : undefined,
-    email: cadastro.emails.length > 0 ? (typeof cadastro.emails[0] === 'string' ? cadastro.emails[0] : String(cadastro.emails[0].email || cadastro.emails[0].enderecoEmail || '')) : undefined,
+    aprovado: sanitizeBoolean(avaliacao.elegivel),
+    motivos_top: sanitizeArray(avaliacao.motivos),
+    riscos: sanitizeArray(riscos),
+    recomendacoes: sanitizeArray(recomendacoes),
+    explicabilidade: sanitizeString(`Análise baseada em dados da Receita Federal. Idade: ${avaliacao.resultados.idade} anos, Situação: ${receita.situacaoCadastral}, CAR detectado: ${avaliacao.resultados.carDetectado ? 'Sim' : 'Não'}. ${avaliacao.elegivel ? 'Cliente elegível para crédito rural.' : 'Cliente não elegível devido aos critérios estabelecidos.'}`) || '',
+    situacao: sanitizeString(receita.situacaoCadastral),
+    renda: sanitizeNumber(cadastro.rendaEstimada),
+    idade: sanitizeNumber(cadastro.idade),
+    telefone: cadastro.telefones.length > 0 ? sanitizeString(cadastro.telefones[0].telefoneComDDD) : undefined,
+    email: cadastro.emails.length > 0 ? sanitizeString(cadastro.emails[0]) : undefined,
     score_quod: score + Math.floor(Math.random() * 100), // Score adicional baseado no principal
-    elegivel: avaliacao.elegivel,
-    motivos_negacao: avaliacao.motivos,
-    dataNascimento: cadastro.dataNascimento,
-    nomeMae: cadastro.nomeMae,
-    sexo: cadastro.sexo,
-    rendaFaixaSalarial: cadastro.rendaFaixaSalarial,
-    dataInscricao: receita.dataInscricao,
-    possuiObito: receita.possuiObito,
-    carDetectado: avaliacao.resultados.carDetectado,
-    quantidadeAutorizacoes: avaliacao.resultados.quantidadeAutorizacoes
+    elegivel: sanitizeBoolean(avaliacao.elegivel),
+    motivos_negacao: sanitizeArray(avaliacao.motivos),
+    dataNascimento: sanitizeString(cadastro.dataNascimento),
+    nomeMae: sanitizeString(cadastro.nomeMae),
+    sexo: sanitizeString(cadastro.sexo),
+    rendaFaixaSalarial: sanitizeString(cadastro.rendaFaixaSalarial),
+    dataInscricao: sanitizeString(receita.dataInscricao),
+    possuiObito: sanitizeBoolean(receita.possuiObito),
+    carDetectado: sanitizeBoolean(avaliacao.resultados.carDetectado),
+    quantidadeAutorizacoes: sanitizeNumber(avaliacao.resultados.quantidadeAutorizacoes)
   };
 };
 
@@ -400,7 +454,7 @@ function App() {
             <User className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-sm text-gray-600">Nome Completo</p>
-              <p className="font-semibold text-gray-900">{String(data.nome)}</p>
+              <p className="font-semibold text-gray-900"><SafeText>{data.nome}</SafeText></p>
             </div>
           </div>
         )}
@@ -422,7 +476,7 @@ function App() {
             <Calendar className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-sm text-gray-600">Idade</p>
-              <p className="font-semibold text-gray-900">{data.idade} anos</p>
+              <p className="font-semibold text-gray-900"><SafeNumber>{data.idade}</SafeNumber> anos</p>
             </div>
           </div>
         )}
@@ -442,7 +496,7 @@ function App() {
             <User className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-sm text-gray-600">Sexo</p>
-              <p className="font-semibold text-gray-900">{String(data.sexo)}</p>
+              <p className="font-semibold text-gray-900"><SafeText>{data.sexo}</SafeText></p>
             </div>
           </div>
         )}
@@ -464,7 +518,7 @@ function App() {
             <User className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-sm text-gray-600">Nome da Mãe</p>
-              <p className="font-semibold text-gray-900">{String(data.nomeMae)}</p>
+              <p className="font-semibold text-gray-900"><SafeText>{data.nomeMae}</SafeText></p>
             </div>
           </div>
         )}
@@ -487,7 +541,7 @@ function App() {
             <Phone className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-sm text-gray-600">Telefone</p>
-              <p className="font-semibold text-gray-900">{String(data.telefone)}</p>
+              <p className="font-semibold text-gray-900"><SafeText>{data.telefone}</SafeText></p>
             </div>
           </div>
         )}
@@ -497,7 +551,7 @@ function App() {
             <Mail className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-sm text-gray-600">E-mail</p>
-              <p className="font-semibold text-gray-900">{String(data.email)}</p>
+              <p className="font-semibold text-gray-900"><SafeText>{data.email}</SafeText></p>
             </div>
           </div>
         )}
@@ -553,7 +607,7 @@ function App() {
             <Activity className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-sm text-gray-600">Situação Cadastral</p>
-              <p className="font-semibold text-gray-900">{String(data.situacao)}</p>
+              <p className="font-semibold text-gray-900"><SafeText>{data.situacao}</SafeText></p>
             </div>
           </div>
         )}
@@ -563,7 +617,7 @@ function App() {
             <TrendingUp className="w-5 h-5 text-gray-600" />
             <div>
               <p className="text-sm text-gray-600">Faixa Salarial</p>
-              <p className="font-semibold text-gray-900">{String(data.rendaFaixaSalarial)}</p>
+              <p className="font-semibold text-gray-900"><SafeText>{data.rendaFaixaSalarial}</SafeText></p>
             </div>
           </div>
         )}
@@ -809,11 +863,11 @@ function App() {
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <div className="p-4 bg-gray-50 rounded-lg">
           <p className="text-sm text-gray-600">Idade</p>
-          <p className="font-semibold text-gray-900">{data.idade} anos</p>
+          <p className="font-semibold text-gray-900"><SafeNumber>{data.idade}</SafeNumber> anos</p>
         </div>
         <div className="p-4 bg-gray-50 rounded-lg">
           <p className="text-sm text-gray-600">Situação Cadastral</p>
-          <p className="font-semibold text-gray-900">{data.situacao}</p>
+          <p className="font-semibold text-gray-900"><SafeText>{data.situacao}</SafeText></p>
         </div>
         <div className="p-4 bg-gray-50 rounded-lg">
           <p className="text-sm text-gray-600">CAR Detectado</p>
@@ -845,7 +899,7 @@ function App() {
           {data.nome && (
             <p className="text-xl text-gray-600">
               Dados de{" "}
-              <span className="font-semibold text-gray-900">{data.nome}</span>
+              <span className="font-semibold text-gray-900"><SafeText>{data.nome}</SafeText></span>
             </p>
           )}
         </div>
